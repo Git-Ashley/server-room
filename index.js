@@ -11,7 +11,7 @@ _initClient
 _canJoin
 */
 
-module.exports.default = class Room {
+module.exports = class Room {
   constructor(ops = {}){
     this._clients = new Map();
     this._id = ops.id || randomStr();
