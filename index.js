@@ -11,7 +11,7 @@ _initClient
 _canJoin
 */
 
-module.exports = class Room {
+module.exports.default = class Room {
   constructor(ops = {}){
     this._clients = new Map();
     this._id = ops.id || randomStr();
@@ -114,3 +114,5 @@ module.exports = class Room {
     client.socket.on(`${this.id}${event}`, listener);
   }
 }
+
+module.exports.ClientPool = ClientPool;
