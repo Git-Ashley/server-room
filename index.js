@@ -99,7 +99,7 @@ module.exports = class Room {
   */
   _initClient(client){
     client.addRoom(this);
-    this._emit('CLIENT_JOINED', client.publicProfile);
+    this.broadcast('CLIENT_JOINED', client.publicProfile);
   }
 
   //Optional override in subclass. Do not call super.
