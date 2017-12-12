@@ -12,7 +12,7 @@ class ClientPool {
 
   addClient(key, userId){
     const newClient = new Client({id: userId});
-    this._clientWsPool.set(key, newClient);
+    this._clientWsPool.set(key, {client: newClient});
     return newClient;
   }
 }

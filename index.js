@@ -49,7 +49,8 @@ module.exports = class Room {
   join(sid, userInfo){
     const result = this._canJoin(userInfo);
     if(result.success){
-      let client = ClientPool.getClient(sid);
+      const clientInfo = ClientPool.getClient(sid);
+      let client = clientInfo && clientInfo.client;
       if(!client)
         client = ClientPool.addClient(sid, userInfo.id);
       result.id = this.id;
