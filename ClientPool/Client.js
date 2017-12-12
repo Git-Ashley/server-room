@@ -6,6 +6,8 @@ const Status = {
 
 module.exports = class Client {
   constructor(ops = {}){
+    if(!ops.sid)
+      return console.log('ERROR: sid must not be empty!');
     if(!ops.username && !ops.id)
       return console.log('ERROR: username and ID cannot both be empty!');
     if(!ops.socket){
