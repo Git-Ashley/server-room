@@ -52,7 +52,7 @@ module.exports = class Room {
       const clientInfo = ClientPool.getClient(sid);
       let client = clientInfo && clientInfo.client;
       if(!client)
-        client = ClientPool.addClient(sid, userInfo.id);
+        client = ClientPool.addClient(sid, userInfo);
       result.id = this.id;
       this._onClientAccepted(client);
     }
