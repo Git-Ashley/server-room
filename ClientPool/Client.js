@@ -21,6 +21,7 @@ module.exports = class Client {
     //this._ip = socket.request.headers['x-real-ip'];
     this._username = ops.username;
     this._id = ops.id || ops.username;
+    this._ip = ops.ip;
     this._rooms = new Map();
 
     //TODO remove and test it still works...
@@ -64,10 +65,9 @@ module.exports = class Client {
     return this._status;
   }
 
-  //TODO
-  /*get ip(){
+  get ip(){
     return this._ip;
-  }*/
+  }
 
   get socket(){
     return this._socket;

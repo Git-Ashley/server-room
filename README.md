@@ -25,4 +25,4 @@ if(result.success){
 ClientPool points SID to {client: client} automatically from server-room upon a successful join, and whatever else you want.
 
 If session is destroyed and client rejoins, be sure to store something else unique
-about that player and point it to the {client, player,...} obj in ClientPool map, and then upon a new join request, the ID will be checked first to see if a previous session was there, and it will simply carry on from there, creating a new client, etc, but not new player info., whilst performing map.delete(previousSid (will be stored in Client))
+about that player and point it to the {client, player,...} obj in ClientPool map, and then upon a new join request, the ID will be checked first to see if a previous session was there, and it will simply carry on from there, creating a new client, etc, but not new player info., whilst performing map.delete(previousSid (will be stored in Client)), checking/changing client.ip address is also optional.

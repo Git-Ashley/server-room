@@ -10,8 +10,9 @@ class ClientPool {
     return this._clientWsPool.get(id);
   }
 
-  addClient(sid, userId){
-    const newClient = new Client({id: userId, sid});
+  addClient(sid, inputOps){
+    const ops = Object.assign({}, inputOps, {sid});
+    const newClient = new Client(ops);
     this._clientWsPool.set(sid, {client: newClient});
     return newClient;
   }
