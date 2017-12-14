@@ -6,6 +6,7 @@ module.exports = class SocketHandler {
   constructor(ws = null){
     this._ws = ws;
     this._eventListeners = {};
+    this._onDisconnectListeners = [];
     if(this._ws)
       this._init();
   }
@@ -21,6 +22,12 @@ module.exports = class SocketHandler {
       for(let listener of listeners)
         listener(event.data);
     });
+
+    this._ws.addEventListener('close', () => {
+      console.log('websocket has closed');
+      while(this._onDisconnectListeners.length)
+        this._onDisconnectListeners.shift()();
+    });
   }
 
   setRawSocket(socket){
@@ -34,11 +41,15 @@ module.exports = class SocketHandler {
     } else {
       if(this._eventListeners[event].has(listener))
         console.log(`Same listener has been registered more than once for event ${event}!`);
-        
+
       this._eventListeners[event].add(listener);
       if(this._eventListeners.lenth >= 5)
-        console.log(`Warning! event ${event} has ${this._eventListeners.length} listeners!`);
+        console.log(`POSSIBLE MEMORY LEAK: event ${event} has ${this._eventListeners.length} listeners.`);
     }
+  }
+
+  onDisconnect(listener){
+    this._onDisconnectListeners.push(listener);
   }
 
   removeListener(event, listener){
@@ -57,7 +68,7 @@ module.exports = class SocketHandler {
       return console.log(`${new Date()}: Attempting to emit message to uninitialized socket`);
 
     if(this._ws.readyState === WebSocket.OPEN)
-    this._ws.send(JSON.stringify({type,data}));
+      this._ws.send(JSON.stringify({type,data}));
   }
 
   close(...args){

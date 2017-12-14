@@ -3,12 +3,13 @@ const ClientPool = require('./ClientPool');
 const randomStr = require('./random-string.js');
 //const EventTypes = require('../event-types.js');
 
-/* Overridable:
-----------------
-_onClientAccepted
-_onClientLeave
-_initClient
-_canJoin
+/* Overridable (*: Must call super. ^: Do not call super)
+---------------------------------------------------------
+*onClientAccepted: When client is accepted & expected to join shortly, but not yet initialized
+*onClientLeave: When client leaves
+*onClientDisconnect: When client disconnects
+*initClient: Hook for when client is initialized on client side. This is the time to register socket events on server side with client. Also optionally you can choose to emit initial startup data (if required) along with an event to tell user the server is also initialized, such as in a game. But note, when at this point, the user is already receiving the rooms events, but cannot emit anything yet. Whether or not you want the user to react to those events or wait for initial startup data and a startup signal is a choice to be made by you!
+^requestJoin
 */
 
 module.exports = class Room {
@@ -22,98 +23,120 @@ module.exports = class Room {
     this.broadcast = this.broadcast.bind(this);
   }
 
-  //********************************** API *************************************
   get id(){
     return this._id;
   }
 
-  get clients(){
-    return this._clients;
+  //Returns array of clients
+  /*get clients(){
+    //TODO
+  }*/
+
+  hasClient(clientId){
+    return Boolean(this._clients.get(clientId));
   }
 
-  hasClient(client){
-    let clientInfo = null;
-    if(client !== null && typeof client === 'object')
-      clientInfo = this.clients.get(client.id);
-    else //assume id string
-      clientInfo = this.clients.get(client);
+  getClient(clientId){
+    const clientInfo = this._clients.get(clientId);
+    return clientInfo && clientInfo.client;
+  }
 
-    if(!clientInfo)
-      return false;
-    else
-      return true;
-
+  getClientListeners(clientId){
+    const clientInfo = this._clients.get(clientId);
+    return clientInfo && clientInfo.listeners;
   }
 
   //userInfo must contain at least an id property
   join(sid, userInfo){
-    const result = this._canJoin(userInfo);
+    const result = this.requestJoin(userInfo);
     if(result.success){
       const clientInfo = ClientPool.getClient(sid);
       let client = clientInfo && clientInfo.client;
       if(!client)
         client = ClientPool.addClient(sid, userInfo);
       result.id = this.id;
-      this._onClientAccepted(client);
+      this.onClientAccepted(client);
     }
     return result;
   }
 
-  leave(client){
-    if(!this.hasClient(client))
-      return console.log('room.js leave() error: Client not found');
+  _cleanupClient(client){
+    const listeners = this.getClientListeners(client.id);
+    if(listeners){
+      for(let [event, listener] of listeners)
+        client.socket.removeListener(event, listener);
+    }
 
-    this._onClientLeave(client);
+    this._clients.delete(client.id);
+    client.removeRoom(this);
+  }
+
+  leave(client){
+    if(!this.hasClient(client.id))
+      return console.log(`room.js leave error: Client ${client.id} not found`);
+
+    this.onClientLeave(client);
   }
 
   broadcast(event, ...args){
     console.log(`emitting ${this.id}${event}`);
-    console.log(`number of clients: ${this.clients.size}`);
+    console.log(`number of clients: ${this._clients.size}`);
     console.log('TODO: add disconnect listener to remove users!');
-    for(let [id, {client}] of this.clients){
+    for(let [id, {client}] of this._clients){
       client.socket.emit(`${this.id}${event}`, ...args);
     }
   }
-  //****************************************************************************
 
-  //Optional override in subclass. If overidden, must call super.
-  _onClientAccepted(client){
-    this.clients.set(client.id, {client, listeners: new Map()});
-    this._addListener(client, 'CLIENT_INITIALIZED', () => {
-      this._initClient(client);
-    });
-    this._addListener(client, 'EXIT', () => this.leave(client));
-  };
-
-  //Optional override in subclass. If overidden, must call super.
-  _onClientLeave(client){
-    //console.log(`client ${client.id} leaving`);
-    const listeners = this.clients.get(client.id).listeners;
-    for(let [event, listener] of listeners)
-      client.socket.removeListener(event, listener);
-    this.clients.delete(client.id);
-    client.removeRoom(this);
-  }
-
-  /*Optional override in subclass. If overidden, must call super. When
-    initClient is called, it can be assumed that the client is fully initialized
-  */
-  _initClient(client){
-    client.addRoom(this);
-    this.broadcast('CLIENT_JOINED', client.publicProfile);
-  }
-
-  //Optional override in subclass. Do not call super.
-  _canJoin(client){return {success: true};}
-
-  _addListener(client, event, listener){
+  addListener(client, event, listener){
     if(!this.hasClient(client))
       return console.log('room.js addListener error: Client not found');
 
     //console.log(`registering listener ${this.id}${event}`);
-    this.clients.get(client.id).listeners.set(`${this.id}${event}`, listener);
+    this.getClientListeners(client.id).set(`${this.id}${event}`, listener);
     client.socket.on(`${this.id}${event}`, listener);
   }
+
+
+  //************************ Overrideables ************************************
+
+  //Optional override in subclass. If overidden, must call super.
+  onClientAccepted(client){
+    this.addListener(client, 'CLIENT_INITIALIZED', () => {
+      this._clients.set(client.id, {client, listeners: new Map()});
+      this.addListener(client, 'EXIT', () => this.leave(client));
+      this.initClient(client);
+    });
+    client.onDisconnect(() => {
+      this.onClientDisconnect(client);
+    });
+  };
+
+  //Optional override in subclass. If overidden, must call super
+  onClientLeave(client){
+    this._cleanupClient(client);
+  }
+
+  //Optional override in subclass. If overidden, must call super
+  onClientDisconnect(client){
+    //TODO add timer... if client does not request to join again within a certain time, boot. Add to list of disconnectedClients, then requestJoin can scan this, and launch a onClickReconnect() ?
+    this._cleanupClient(client);
+  }
+
+  /*
+  onClientReconnect(){
+    re-add to room, and add onDisconnect listener again
+  }
+  */
+
+  /*Optional override in subclass. If overidden, must call super. When
+    initClient is called, it can be assumed that the client is fully initialized
+  */
+  initClient(client){
+    client.addRoom(this);
+  }
+
+  //Optional override in subclass. Do not call super.
+  requestJoin(client){return {success: true};}
 }
 
 module.exports.ClientPool = ClientPool;

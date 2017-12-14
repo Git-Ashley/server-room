@@ -1,7 +1,8 @@
 const SocketHandler = require('./SocketHandler');
 const Status = {
   PENDING: 'PENDING',
-  CONNECTED: 'CONNECTED'
+  CONNECTED: 'CONNECTED',
+  DISCONNECTED: 'DISCONNECTED'
 };
 
 module.exports = class Client {
@@ -12,11 +13,15 @@ module.exports = class Client {
       return console.log('ERROR: username and ID cannot both be empty!');
     if(!ops.socket){
       this._status = Status.PENDING;
-      this._socket = new SocketHandler();
+      this._socket = new SocketHandler(null);
     } else {
       this._status = Status.CONNECTED;
       this._socket = new SocketHandler(ops.socket);
     }
+
+    this.onDisconnect(() => {
+      this._status = Status.DISCONNECTED;
+    });
 
     //this._ip = socket.request.headers['x-real-ip'];
     this._username = ops.username;
@@ -53,6 +58,10 @@ module.exports = class Client {
     this._rooms.clear();
   }
 
+  onDisconnect(listener){
+    this.socket.onDisconnect(listener);
+  }
+
   get id(){
     return this._id || this._username;
   }
@@ -77,7 +86,7 @@ module.exports = class Client {
     if(this.status === Status.CONNECTED){
       this._socket.terminate();
       this._socket.setRawSocket(socket);
-    } else if(this.status === Status.PENDING) {
+    } else {
       this._socket.setRawSocket(socket);
       this._status = Status.CONNECTED;
     }
