@@ -95,7 +95,7 @@ module.exports = class Room {
 
   addListener(client, event, listener){
     if(!this.hasClient(client))
-      return console.log('room.js addListener error: Client not found');
+      return console.log(`room.js addListener error: Client ${client.id} not found`);
 
     //console.log(`registering listener ${this.id}${event}`);
     this.getClientListeners(client.id).set(`${this.id}${event}`, listener);
