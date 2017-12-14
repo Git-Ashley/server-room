@@ -12,6 +12,11 @@ const randomStr = require('./random-string.js');
 ^requestJoin
 */
 
+const Status = {
+  INITIALIZING: 'INITIALIZING',
+  ACTIVE: 'ACTIVE'
+};
+
 module.exports = class Room {
   constructor(ops = {}){
     this._clients = new Map();
@@ -82,8 +87,9 @@ module.exports = class Room {
     console.log(`emitting ${this.id}${event}`);
     console.log(`number of clients: ${this._clients.size}`);
     console.log('TODO: add disconnect listener to remove users!');
-    for(let [id, {client}] of this._clients){
-      client.socket.emit(`${this.id}${event}`, ...args);
+    for(let [id, {client, clientStatus}] of this._clients){
+      if(clientStatus === Status.ACTIVE)
+        client.socket.emit(`${this.id}${event}`, ...args);
     }
   }
 
@@ -101,11 +107,11 @@ module.exports = class Room {
 
   //Optional override in subclass. If overidden, must call super.
   onClientAccepted(client){
+    this._clients.set(client.id, {client, listeners: new Map(), clientStatus: Status.INITIALIZING});
     this.addListener(client, 'CLIENT_INITIALIZED', () => {
-      this._clients.set(client.id, {client, listeners: new Map()});
-      this.addListener(client, 'EXIT', () => this.leave(client));
       this.initClient(client);
     });
+    this.addListener(client, 'EXIT', () => this.leave(client));
     client.onDisconnect(() => {
       this.onClientDisconnect(client);
     });
@@ -132,6 +138,7 @@ module.exports = class Room {
     initClient is called, it can be assumed that the client is fully initialized
   */
   initClient(client){
+    this._clients.get(client.id).clientStatus = Status.ACTIVE;
     client.addRoom(this);
   }
 
