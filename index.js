@@ -37,8 +37,8 @@ module.exports = class Room {
     //TODO
   }*/
 
-  hasClient(clientId){
-    return Boolean(this._clients.get(clientId));
+  hasClient(client){
+    return Boolean(this._clients.get(client.id));
   }
 
   getClient(clientId){
