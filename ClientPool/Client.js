@@ -24,7 +24,9 @@ module.exports = class Client {
     this._ip = ops.ip;
     this._rooms = new Map();
 
-    this._socketHandler.on('disconnect', () => this._status = Status.DISCONNECTED);
+    this._socketHandler.on('disconnect', () => {
+      this._status = Status.DISCONNECTED;
+    });
   }
 
   addRoom(room){
