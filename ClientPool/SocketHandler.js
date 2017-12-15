@@ -28,6 +28,7 @@ module.exports = class SocketHandler {
     });
 
     this._ws.addEventListener('close', () => {
+      console.log('socket closed.');
       const listeners1 = this._eventListeners['DISCONNECT'];
       const listeners2 = this._eventListeners['disconnect'];
       if(listeners1){
