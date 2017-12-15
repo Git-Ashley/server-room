@@ -28,8 +28,10 @@ module.exports = class SocketHandler {
     });
 
     this._ws.addEventListener('close', () => {
-      console.log('websocket has closed');
-      const listeners = this._eventListeners['disconnect'].concat(this._eventListeners['DISCONNECT']);
+      const listeners = new Set([
+        ...this._eventListeners['disconnect'],
+        ...this._eventListeners['DISCONNECT']
+      ]);
       for(let listener of listeners)
         listener();
     });
