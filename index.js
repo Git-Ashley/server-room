@@ -93,7 +93,10 @@ module.exports = class Room {
 
     //console.log(`registering listener ${this.id}${event}`);
     this._getClientListeners(client.id).set(`${this.id}${event}`, listener);
-    client.socket.on(`${this.id}${event}`, listener);
+    if(event === 'disconnect' || event === 'DISCONNECT')
+      client.socket.on(event, listener);
+    else
+      client.socket.on(`${this.id}${event}`, listener);
   }
 
 
