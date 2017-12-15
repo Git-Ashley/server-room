@@ -104,7 +104,10 @@ module.exports = class Room {
     this._clients.set(client.id, {client, listeners: new Map(), clientStatus: Status.INITIALIZING});
     this.addListener(client, 'CLIENT_INITIALIZED', () => this.initClient(client));
     this.addListener(client, 'EXIT', () => this.leave(client));
-    this.addListener(client, 'disconnect', () => this.onClientDisconnect(client));
+    this.addListener(client, 'disconnect', () => {
+      console.log(`client ${client.id} disconnected`);
+      this.onClientDisconnect(client);
+    });
   };
 
   //Optional override in subclass. If overidden, must call super
