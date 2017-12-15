@@ -21,11 +21,6 @@ module.exports = class Room {
   constructor(ops = {}){
     this._clients = new Map();
     this._id = ops.id || randomStr();
-
-    //bindings
-    this.join = this.join.bind(this);
-    this.leave = this.leave.bind(this);
-    this.broadcast = this.broadcast.bind(this);
   }
 
   get id(){
@@ -46,13 +41,14 @@ module.exports = class Room {
     return clientInfo && clientInfo.client;
   }
 
-  getClientListeners(clientId){
+  _getClientListeners(clientId){
     const clientInfo = this._clients.get(clientId);
     return clientInfo && clientInfo.listeners;
   }
 
   //userInfo must contain at least an id property
   join(sid, userInfo){
+    //TODO check if disconnected first, then return success: true, reconnect: true
     const result = this.requestJoin(userInfo);
     if(result.success){
       const clientInfo = ClientPool.getClient(sid);
@@ -66,7 +62,7 @@ module.exports = class Room {
   }
 
   _cleanupClient(client){
-    const listeners = this.getClientListeners(client.id);
+    const listeners = this._getClientListeners(client.id);
     if(listeners){
       for(let [event, listener] of listeners)
         client.socket.removeListener(event, listener);
@@ -85,8 +81,6 @@ module.exports = class Room {
 
   broadcast(event, ...args){
     console.log(`emitting ${this.id}${event}`);
-    console.log(`number of clients: ${this._clients.size}`);
-    console.log('TODO: add disconnect listener to remove users!');
     for(let [id, {client, clientStatus}] of this._clients){
       if(clientStatus === Status.ACTIVE)
         client.socket.emit(`${this.id}${event}`, ...args);
@@ -98,7 +92,7 @@ module.exports = class Room {
       return console.log(`room.js addListener error: Client ${client.id} not found`);
 
     //console.log(`registering listener ${this.id}${event}`);
-    this.getClientListeners(client.id).set(`${this.id}${event}`, listener);
+    this._getClientListeners(client.id).set(`${this.id}${event}`, listener);
     client.socket.on(`${this.id}${event}`, listener);
   }
 
@@ -108,13 +102,9 @@ module.exports = class Room {
   //Optional override in subclass. If overidden, must call super.
   onClientAccepted(client){
     this._clients.set(client.id, {client, listeners: new Map(), clientStatus: Status.INITIALIZING});
-    this.addListener(client, 'CLIENT_INITIALIZED', () => {
-      this.initClient(client);
-    });
+    this.addListener(client, 'CLIENT_INITIALIZED', () => this.initClient(client));
     this.addListener(client, 'EXIT', () => this.leave(client));
-    client.onDisconnect(() => {
-      this.onClientDisconnect(client);
-    });
+    this.addListener(client, 'disconnect', () => this.onClientDisconnect(client));
   };
 
   //Optional override in subclass. If overidden, must call super

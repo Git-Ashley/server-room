@@ -1,6 +1,6 @@
 const SocketHandler = require('./SocketHandler');
 const Status = {
-  PENDING: 'PENDING',
+  INITIALIZING: 'INITIALIZING',
   CONNECTED: 'CONNECTED',
   DISCONNECTED: 'DISCONNECTED'
 };
@@ -9,30 +9,22 @@ module.exports = class Client {
   constructor(ops = {}){
     if(!ops.sid)
       return console.log('ERROR: sid must not be empty!');
-    if(!ops.username && !ops.id)
-      return console.log('ERROR: username and ID cannot both be empty!');
+    if(!ops.id)
+      return console.log('ERROR: ID cannot be empty!');
     if(!ops.socket){
-      this._status = Status.PENDING;
-      this._socket = new SocketHandler(null);
+      this._status = Status.INITIALIZING;
+      this._socketHandler = new SocketHandler(null);
     } else {
       this._status = Status.CONNECTED;
-      this._socket = new SocketHandler(ops.socket);
+      this._socketHandler = new SocketHandler(ops.socket);
     }
 
-    this.onDisconnect(() => {
-      this._status = Status.DISCONNECTED;
-    });
-
-    //this._ip = socket.request.headers['x-real-ip'];
     this._username = ops.username;
-    this._id = ops.id || ops.username;
+    this._id = ops.id;
     this._ip = ops.ip;
     this._rooms = new Map();
 
-    //TODO remove and test it still works...
-    this.addRoom = this.addRoom.bind(this);
-    this.removeRoom = this.removeRoom.bind(this);
-    this.in = this.in.bind(this);
+    this._socketHandler.on('disconnect', () => this._status = Status.DISCONNECTED);
   }
 
   addRoom(room){
@@ -58,12 +50,8 @@ module.exports = class Client {
     this._rooms.clear();
   }
 
-  onDisconnect(listener){
-    this.socket.onDisconnect(listener);
-  }
-
   get id(){
-    return this._id || this._username;
+    return this._id;
   }
 
   get username(){
@@ -79,16 +67,13 @@ module.exports = class Client {
   }
 
   get socket(){
-    return this._socket;
+    return this._socketHandler;
   }
 
   set socket(socket){
     if(this.status === Status.CONNECTED){
-      this._socket.terminate();
-      this._socket.setRawSocket(socket);
-    } else {
-      this._socket.setRawSocket(socket);
-      this._status = Status.CONNECTED;
-    }
+      this._socketHandler.terminate();
+
+    this._socketHandler.setRawSocket(socket);
   }
 }

@@ -1,12 +1,16 @@
 // Server socket handler
 const WebSocket = require('ws');
 
+
+/*
+* Emits 'disconnect' event when socket disconnects
+*/
+
 module.exports = class SocketHandler {
 
   constructor(ws = null){
     this._ws = ws;
     this._eventListeners = {};
-    this._onDisconnectListeners = [];
     if(this._ws)
       this._init();
   }
@@ -25,8 +29,9 @@ module.exports = class SocketHandler {
 
     this._ws.addEventListener('close', () => {
       console.log('websocket has closed');
-      while(this._onDisconnectListeners.length)
-        this._onDisconnectListeners.shift()();
+      const listeners = this._eventListeners['disconnect'].concat(this._eventListeners['DISCONNECT']);
+      for(let listener of listeners)
+        listener();
     });
   }
 
@@ -46,10 +51,6 @@ module.exports = class SocketHandler {
       if(this._eventListeners.lenth >= 5)
         console.log(`POSSIBLE MEMORY LEAK: event ${event} has ${this._eventListeners.length} listeners.`);
     }
-  }
-
-  onDisconnect(listener){
-    this._onDisconnectListeners.push(listener);
   }
 
   removeListener(event, listener){
