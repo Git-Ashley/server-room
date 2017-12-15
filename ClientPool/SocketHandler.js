@@ -28,11 +28,9 @@ module.exports = class SocketHandler {
     });
 
     this._ws.addEventListener('close', () => {
-      const listeners = new Set([
-        ...this._eventListeners['disconnect'],
-        ...this._eventListeners['DISCONNECT']
-      ]);
-      for(let listener of listeners)
+      for(let listener of this._eventListeners['DISCONNECT'])
+        listener();
+      for(let listener of this._eventListeners['disconnect'])
         listener();
     });
   }
