@@ -24,9 +24,7 @@ module.exports = class Client {
     this._ip = ops.ip;
     this._rooms = new Map();
 
-    this._socketHandler.on('disconnect', () => {
-      this._status = Status.DISCONNECTED;
-    });
+    this._socketHandler.on('disconnect', () => this._status = Status.DISCONNECTED);
   }
 
   addRoom(room){
@@ -73,7 +71,7 @@ module.exports = class Client {
   }
 
   set socket(socket){
-    if(this.status === Status.CONNECTED){
+    if(this.status === Status.CONNECTED)
       this._socketHandler.terminate();
 
     this._socketHandler.setRawSocket(socket);
