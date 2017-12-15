@@ -28,10 +28,16 @@ module.exports = class SocketHandler {
     });
 
     this._ws.addEventListener('close', () => {
-      for(let listener of this._eventListeners['DISCONNECT'])
-        listener();
-      for(let listener of this._eventListeners['disconnect'])
-        listener();
+      const listeners1 = this._eventListeners['DISCONNECT'];
+      const listeners2 = this._eventListeners['disconnect'];
+      if(listeners1){
+        for(let listener of listeners1)
+          listener();
+      }
+      if(listeners2){
+        for(let listener of listeners2)
+          listener();
+      }
     });
   }
 
