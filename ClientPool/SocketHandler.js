@@ -36,9 +36,7 @@ module.exports = class SocketHandler {
           listener();
       }
       if(listeners2){
-        console.log(`There are ${listeners2.size} disconnect listeners`);
         for(let listener of listeners2){
-          console.log('invoking listener');
           listener();
         }
       }
