@@ -9,13 +9,8 @@ const randomStr = require('./random-string.js');
 *onClientLeave: When client leaves
 *onClientDisconnect: When client disconnects
 *initClient: Hook for when client is initialized on client side. This is the time to register socket events on server side with client. Also optionally you can choose to emit initial startup data (if required) along with an event to tell user the server is also initialized, such as in a game. But note, when at this point, the user is already receiving the rooms events, but cannot emit anything yet. Whether or not you want the user to react to those events or wait for initial startup data and a startup signal is a choice to be made by you!
-^requestJoin
+^onJoinRequest
 */
-
-const Status = {
-  INITIALIZING: 'INITIALIZING',
-  ACTIVE: 'ACTIVE'
-};
 
 module.exports = class Room {
   constructor(ops = {}){
@@ -27,36 +22,39 @@ module.exports = class Room {
     return this._id;
   }
 
+  get clients(){
+    return this._clients;
+  }
+
   //Returns array of clients
   /*get clients(){
     //TODO
   }*/
 
   hasClient(client){
-    return Boolean(this._clients.get(client.id));
+    return Boolean(this.clients.get(client.id));
   }
 
   getClient(clientId){
-    const clientInfo = this._clients.get(clientId);
+    const clientInfo = this.clients.get(clientId);
     return clientInfo && clientInfo.client;
   }
 
   _getClientListeners(clientId){
-    const clientInfo = this._clients.get(clientId);
+    const clientInfo = this.clients.get(clientId);
     return clientInfo && clientInfo.listeners;
   }
 
   //userInfo must contain at least an id property
   join(sid, userInfo){
     //TODO check if disconnected first, then return success: true, reconnect: true
-    const result = this.requestJoin(userInfo);
+    const result = this.onJoinRequest(userInfo);
     if(result.success){
-      const clientInfo = ClientPool.getClient(sid);
-      let client = clientInfo && clientInfo.client;
+      let client = ClientPool.getClient(sid);
       if(!client)
         client = ClientPool.addClient(sid, userInfo);
       result.id = this.id;
-      this.onClientAccepted(client);
+      this.onClientAccepted(client, userInfo);
     }
     return result;
   }
@@ -68,7 +66,7 @@ module.exports = class Room {
         client.socket.removeListener(event, listener);
     }
 
-    this._clients.delete(client.id);
+    this.clients.delete(client.id);
     client.removeRoom(this);
   }
 
@@ -81,10 +79,13 @@ module.exports = class Room {
 
   broadcast(event, ...args){
     console.log(`emitting ${this.id}${event}`);
-    for(let [id, {client, clientStatus}] of this._clients){
-      if(clientStatus === Status.ACTIVE)
-        client.socket.emit(`${this.id}${event}`, ...args);
-    }
+    for(let [id, {client}] of this.clients)
+      client.socket.emit(`${this.id}${event}`, ...args);
+  }
+
+  emit(client, event, payload = null){
+    if(client)
+      client.socket.emit(`${this.id}${event}`, payload);
   }
 
   addListener(client, event, listener){
@@ -99,12 +100,11 @@ module.exports = class Room {
       client.socket.on(`${this.id}${event}`, listener);
   }
 
-
   //************************ Overrideables ************************************
 
   //Optional override in subclass. If overidden, must call super.
   onClientAccepted(client){
-    this._clients.set(client.id, {client, listeners: new Map(), clientStatus: Status.INITIALIZING});
+    this.clients.set(client.id, {client, listeners: new Map(), initialized: false});
     this.addListener(client, 'CLIENT_INITIALIZED', () => this.initClient(client));
     this.addListener(client, 'EXIT', () => this.leave(client));
     this.addListener(client, 'disconnect', () => {
@@ -120,13 +120,14 @@ module.exports = class Room {
 
   //Optional override in subclass. If overidden, must call super
   onClientDisconnect(client){
-    //TODO add timer... if client does not request to join again within a certain time, boot. Add to list of disconnectedClients, then requestJoin can scan this, and launch a onClickReconnect() ?
+    //TODO add a timeout option until leave (0 = boot instant, -1 = indefinite)
+    //TODO Add functionality where client iterates over its rooms after reconnect and rejoins them all (join() checks for if client already there with disconnected status). Or similar.
     this._cleanupClient(client);
   }
 
   /*
   onClientReconnect(){
-    re-add to room, and add onDisconnect listener again
+    //TODO
   }
   */
 
@@ -134,12 +135,12 @@ module.exports = class Room {
     initClient is called, it can be assumed that the client is fully initialized
   */
   initClient(client){
-    this._clients.get(client.id).clientStatus = Status.ACTIVE;
+    this.clients.get(client.id).initialized = true;
     client.addRoom(this);
   }
 
   //Optional override in subclass. Do not call super.
-  requestJoin(client){return {success: true};}
+  onJoinRequest(client){return {success: true};}
 }
 
 module.exports.ClientPool = ClientPool;
