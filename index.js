@@ -31,11 +31,12 @@ module.exports = class Room {
     //TODO
   }*/
 
-  hasClient(client){
-    return Boolean(this.clients.get(client.id));
+  hasClient(inputClient){
+    const clientId = typeof inputClient === 'string' ? inputClient : inputClient.id;
+    return Boolean(this.clients.get(clientId));
   }
 
-  getClient(clientId){
+  getClientById(clientId){
     const clientInfo = this.clients.get(clientId);
     return clientInfo && clientInfo.client;
   }
@@ -88,22 +89,21 @@ module.exports = class Room {
       client.socket.emit(`${this.id}${event}`, payload);
   }
 
-  addListener(client, event, listener){
+  addListener(client, inputEvent, listener){
     if(!this.hasClient(client))
       return console.log(`room.js addListener error: Client ${client.id} not found`);
 
-    //console.log(`registering listener ${this.id}${event}`);
-    this._getClientListeners(client.id).set(`${this.id}${event}`, listener);
-    if(event === 'disconnect' || event === 'DISCONNECT')
-      client.socket.on(event, listener);
-    else
-      client.socket.on(`${this.id}${event}`, listener);
+    const event = inputEvent === 'disconnect' || inputEvent === 'DISCONNECT' ?
+      inputEvent : `${this.id}${inputEvent}`;
+    this._getClientListeners(client.id).set(event, listener);
+    client.socket.on(event, listener);
   }
 
   //************************ Overrideables ************************************
 
   //Optional override in subclass. If overidden, must call super.
   onClientAccepted(client){
+    console.log(`client ${client.id} accepted`);
     this.clients.set(client.id, {client, listeners: new Map(), initialized: false});
     this.addListener(client, 'CLIENT_INITIALIZED', () => this.initClient(client));
     this.addListener(client, 'EXIT', () => this.leave(client));
@@ -115,6 +115,7 @@ module.exports = class Room {
 
   //Optional override in subclass. If overidden, must call super
   onClientLeave(client){
+    console.log(`${client.id} left room`);
     this._cleanupClient(client);
   }
 
@@ -140,7 +141,7 @@ module.exports = class Room {
   }
 
   //Optional override in subclass. Do not call super.
-  onJoinRequest(client){return {success: true};}
+  onJoinRequest(userInfo){return {success: true};}
 }
 
 module.exports.ClientPool = ClientPool;
