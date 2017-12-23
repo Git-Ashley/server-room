@@ -79,7 +79,7 @@ module.exports = class Room {
   }
 
   broadcast(event, ...args){
-    console.log(`emitting ${this.id}${event}`);
+    //console.log(`emitting ${this.id}${event}`);
     for(let [id, {client}] of this.clients)
       client.socket.emit(`${this.id}${event}`, ...args);
   }
