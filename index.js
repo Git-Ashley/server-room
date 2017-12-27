@@ -105,6 +105,7 @@ module.exports = class Room {
   onClientAccepted(client){
     console.log(`client ${client.id} accepted`);
     this.clients.set(client.id, {client, listeners: new Map(), initialized: false});
+    client.addRoom(this);
     this.addListener(client, 'CLIENT_INITIALIZED', () => this.initClient(client));
     this.addListener(client, 'EXIT', () => this.leave(client));
     this.addListener(client, 'disconnect', () => {
@@ -137,7 +138,6 @@ module.exports = class Room {
   */
   initClient(client){
     this.clients.get(client.id).initialized = true;
-    client.addRoom(this);
   }
 
   //Optional override in subclass. Do not call super.

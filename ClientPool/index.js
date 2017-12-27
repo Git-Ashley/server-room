@@ -16,6 +16,10 @@ class ClientPool {
     this._clientWsPool.set(sid, newClient);
     return newClient;
   }
+
+  removeClient(sid){
+    this._clientWsPool.delete(sid);
+  }
 }
 
 const clientPool = new ClientPool();

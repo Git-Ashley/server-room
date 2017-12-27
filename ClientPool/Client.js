@@ -1,4 +1,5 @@
 const SocketHandler = require('./SocketHandler');
+const ClientPool = require('./index.js');
 const Status = {
   INITIALIZING: 'INITIALIZING',
   CONNECTED: 'CONNECTED',
@@ -22,6 +23,7 @@ module.exports = class Client {
     this._username = ops.username;
     this._id = ops.id;
     this._ip = ops.ip;
+    this._sid = ops.sid;
     this._rooms = new Map();
 
     this._socketHandler.on('disconnect', () => this._status = Status.DISCONNECTED);
@@ -33,6 +35,8 @@ module.exports = class Client {
 
   removeRoom(room){
     this._rooms.delete(room.roomId);
+    if(!this._rooms.size)
+      ClientPool.removeClient(this.sid);
   }
 
   in(inputRoom){
@@ -52,6 +56,10 @@ module.exports = class Client {
 
   get id(){
     return this._id;
+  }
+
+  get sid(){
+    return this._sid;
   }
 
   get username(){
