@@ -3,19 +3,29 @@ const ClientPool = require('./ClientPool');
 const randomStr = require('./random-string.js');
 //const EventTypes = require('../event-types.js');
 
-/* Overridable (*: Must call super. ^: Do not call super)
+/* Hooks (*: Must call super. ^: Do not call super)
 ---------------------------------------------------------
 *onClientAccepted: When client is accepted & expected to join shortly, but not yet initialized
-*onClientLeave: When client leaves
+*onClientDisconnect: When client disconnects
 *onClientDisconnect: When client disconnects
 *initClient: Hook for when client is initialized on client side. This is the time to register socket events on server side with client. Also optionally you can choose to emit initial startup data (if required) along with an event to tell user the server is also initialized, such as in a game. But note, when at this point, the user is already receiving the rooms events, but cannot emit anything yet. Whether or not you want the user to react to those events or wait for initial startup data and a startup signal is a choice to be made by you!
-^onJoinRequest
+*onClientLeave: When client leaves. Be aware that this may happen any time after onClientAccepted (including before initClient called)
+^onJoinRequest: Return true if permission granted to join, false otherwise. If not overidden, permission is always granted
+
+****Options to constructor*****
+initTimeout: time in milliseconds for client to notify initialization
+  complete (via initialize() on client) before being kicked. (default 10 sec)
+reconnectTimeout: time in milliseconds that clients have to reconnect upon disconnect. If
+  ${timeout} seconds passes without reconnecting, client will be booted from room.
+  (default 0ms)
 */
 
 module.exports = class Room {
   constructor(ops = {}){
     this._clients = new Map();
-    this._id = ops.id || randomStr();
+    this._id = randomStr();
+    this._initTimeout = ops.initTimeout || 10000;
+    this._reconnectTimeout = ops.reconnectTimeout || 0;
   }
 
   get id(){
@@ -44,6 +54,12 @@ module.exports = class Room {
   _getClientListeners(clientId){
     const clientInfo = this.clients.get(clientId);
     return clientInfo && clientInfo.listeners;
+  }
+
+  _initTimeout(client){
+    const clientInfo = this.clients.get(client.id);
+    if(clientInfo && !clientInfo.initialized)
+      this.leave(client);
   }
 
   //userInfo must contain at least an id property
@@ -93,7 +109,7 @@ module.exports = class Room {
     if(!this.hasClient(client))
       return console.log(`room.js addListener error: Client ${client.id} not found`);
 
-    const event = inputEvent === 'disconnect' || inputEvent === 'DISCONNECT' ?
+    const event = inputEvent === 'disconnect' || inputEvent === 'reconnect' ?
       inputEvent : `${this.id}${inputEvent}`;
     this._getClientListeners(client.id).set(event, listener);
     client.socket.on(event, listener);
@@ -104,13 +120,22 @@ module.exports = class Room {
   //Optional override in subclass. If overidden, must call super.
   onClientAccepted(client){
     console.log(`client ${client.id} accepted`);
-    this.clients.set(client.id, {client, listeners: new Map(), initialized: false});
+    setTimeout(() => {
+      this._initTimeout(client);
+    }, this._initTimeout);
+    this.clients.set(client.id, {client, listeners: new Map(), initialized: false, disconnected: false});
     client.addRoom(this);
     this.addListener(client, 'CLIENT_INITIALIZED', () => this.initClient(client));
     this.addListener(client, 'EXIT', () => this.leave(client));
     this.addListener(client, 'disconnect', () => {
       console.log(`client ${client.id} disconnected`);
-      this.onClientDisconnect(client);
+      if(this.hasClient(client))
+        this.onClientDisconnect(client);
+    });
+    this.addListener(client, 'reconnect', () => {
+      console.log(`client ${client.id} reconnected`);
+      if(this.hasClient(client))
+        this.onClientReconnect(client);
     });
   };
 
@@ -122,16 +147,24 @@ module.exports = class Room {
 
   //Optional override in subclass. If overidden, must call super
   onClientDisconnect(client){
-    //TODO add a timeout option until leave (0 = boot instant, -1 = indefinite)
-    //TODO Add functionality where client iterates over its rooms after reconnect and rejoins them all (join() checks for if client already there with disconnected status). Or similar.
-    this._cleanupClient(client);
+    const clientInfo = this.clients.get(client.id);
+    if(clientInfo)
+      clientInfo.disconnected = true;
+
+    if(this._reconnectTimeout >= 0){
+      this.setTimeout(() => {
+        if(clientInfo.disconnected)
+          this.leave(client);
+      }, this._reconnectTimeout);
+    }
   }
 
-  /*
-  onClientReconnect(){
-    //TODO
+  //Optional overrid in subclass. If overidden, must call super
+  onClientReconnect(client){
+    const clientInfo = this.clients.get(client.id);
+    if(clientInfo)
+      clientInfo.disconnected = false;
   }
-  */
 
   /*Optional override in subclass. If overidden, must call super. When
     initClient is called, it can be assumed that the client is fully initialized

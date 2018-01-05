@@ -11,9 +11,19 @@ module.exports = class SocketHandler {
   constructor(ws = null){
     this._ws = ws;
     this._eventListeners = {};
+    this._reconnect = false;
     if(this._ws)
       this._init();
   }
+
+  /*get status(){
+    if(this._ws && this._ws.readyState === WebSocket.OPEN)
+      return Status.CONNECTED;
+    else if(this._ws && this._ws.readyState === WebSocket.CONNECTING)
+      return Status.CONNECTING;
+    else
+      return Status.DISCONNECTED;
+  }*/
 
   _init(){
     this._ws.addEventListener('message', eventJson => {
@@ -33,9 +43,21 @@ module.exports = class SocketHandler {
       if(listeners)
         listeners.forEach(listener => listener());
     });
+
+    this._ws.addEventListener('open', () => {
+      const eventType = this._reconnect ? 'reconnect' : 'connect';
+      console.log(`Socket ${eventType}ed`);
+      const listeners = this._eventListeners[eventType];
+      this._reconnect = true;
+      if(listeners)
+        listeners.forEach(listener => listener());
+    });
   }
 
   setRawSocket(socket){
+    if(this._ws && (this._ws.readyState === WebSocket.CONNECTING || this._ws.readyState === WebSocket.OPEN))
+      this._ws.terminate();
+
     this._ws = socket;
     this._init();
   }

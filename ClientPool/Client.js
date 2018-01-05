@@ -1,10 +1,5 @@
 const SocketHandler = require('./SocketHandler');
 const ClientPool = require('./index.js');
-const Status = {
-  INITIALIZING: 'INITIALIZING',
-  CONNECTED: 'CONNECTED',
-  DISCONNECTED: 'DISCONNECTED'
-};
 
 module.exports = class Client {
   constructor(ops = {}){
@@ -13,10 +8,8 @@ module.exports = class Client {
     if(!ops.id)
       return console.log('ERROR: ID cannot be empty!');
     if(!ops.socket){
-      this._status = Status.INITIALIZING;
       this._socketHandler = new SocketHandler(null);
     } else {
-      this._status = Status.CONNECTED;
       this._socketHandler = new SocketHandler(ops.socket);
     }
 
@@ -25,8 +18,6 @@ module.exports = class Client {
     this._ip = ops.ip;
     this._sid = ops.sid;
     this._rooms = new Map();
-
-    this._socketHandler.on('disconnect', () => this._status = Status.DISCONNECTED);
   }
 
   addRoom(room){
@@ -66,10 +57,6 @@ module.exports = class Client {
     return this._username || this._id;
   }
 
-  get status(){
-    return this._status;
-  }
-
   get ip(){
     return this._ip;
   }
@@ -78,10 +65,11 @@ module.exports = class Client {
     return this._socketHandler;
   }
 
-  set socket(socket){
-    if(this.status === Status.CONNECTED)
-      this._socketHandler.terminate();
+  /*get status(){
+    return this.socket.status;
+  }*/
 
+  set socket(socket){
     this._socketHandler.setRawSocket(socket);
   }
 }
