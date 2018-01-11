@@ -253,6 +253,10 @@ module.exports.initialize = (wsServer, ops = {}) => {
   wsServer.on('connection', function(rawWs, req){
     const sid = getCookie(req.headers.cookie, sidHeader);
     const client = ClientPool.getClient(sid);
+    if(!sid || !client){
+      console.log(`Refused unexpected websocket connection from ${ops.ipHeader ? req.headers[ops.ipHeader] : ''}`);
+      return rawWs.terminate();
+    }
     const live = parse(req.url, true).query.live;
     const isReconnect = live === 'true' ? true : false;
     client.socket.setRawSocket(rawWs, isReconnect);
