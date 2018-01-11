@@ -48,6 +48,11 @@ module.exports = class Room {
     return Boolean(this._clients.get(sid));
   }
 
+  isConnected(client){
+    const clientInfo = this._clients.get(client.sid);
+    return clientInfo && !clientInfo.disconnected && !clientInfo.rejoinRequired;
+  }
+
   getClientBySid(sid){
     const clientInfo = this._clients.get(sid);
     return clientInfo && clientInfo.client;
