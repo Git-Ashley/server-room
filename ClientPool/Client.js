@@ -1,12 +1,11 @@
 const SocketHandler = require('./SocketHandler');
-const ClientPool = require('./index.js');
 
 module.exports = class Client {
   constructor(ops = {}){
     if(!ops.sid)
       return console.log('ERROR: sid must not be empty!');
-    if(!ops.id)
-      return console.log('ERROR: ID cannot be empty!');
+    if(!ops.onLeftAllRooms)
+      return console.log('ERROR: onLeftAllRooms must be defined!');
     if(!ops.socket){
       this._socketHandler = new SocketHandler(null);
     } else {
@@ -18,16 +17,19 @@ module.exports = class Client {
     this._ip = ops.ip;
     this._sid = ops.sid;
     this._rooms = new Map();
+    this._onLeftAllRooms = ops.onLeftAllRooms;
   }
 
   addRoom(room){
-    this._rooms.set(room.roomId, room);
+    this._rooms.set(room.id, room);
   }
 
   removeRoom(room){
     this._rooms.delete(room.roomId);
-    if(!this._rooms.size)
-      ClientPool.removeClient(this.sid);
+    if(!this._rooms.size){
+      console.log(`Client: ${this.id || this.sid} left all rooms`);
+      this._onLeftAllRooms(this.sid);
+    }
   }
 
   in(inputRoom){
@@ -39,7 +41,7 @@ module.exports = class Client {
   }
 
   leaveAllRooms(){
-    console.log(`${this.username} leaving all rooms`);
+    console.log(`${this.id || this.sid} leaving all rooms`);
     for(let [roomId, room] of this._rooms)
       room.leave(this);
     this._rooms.clear();
@@ -53,8 +55,8 @@ module.exports = class Client {
     return this._sid;
   }
 
-  get username(){
-    return this._username || this._id;
+  set sid(sid){
+    this._sid = sid;
   }
 
   get ip(){
@@ -65,11 +67,12 @@ module.exports = class Client {
     return this._socketHandler;
   }
 
+  get rooms(){
+    return this._rooms;
+  }
+
   /*get status(){
     return this.socket.status;
   }*/
 
-  set socket(socket){
-    this._socketHandler.setRawSocket(socket);
-  }
 }

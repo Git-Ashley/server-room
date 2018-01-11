@@ -11,7 +11,6 @@ module.exports = class SocketHandler {
   constructor(ws = null){
     this._ws = ws;
     this._eventListeners = {};
-    this._reconnect = false;
     if(this._ws)
       this._init();
   }
@@ -38,28 +37,29 @@ module.exports = class SocketHandler {
     });
 
     this._ws.addEventListener('close', () => {
-      console.log('socket closed.');
       const listeners = this._eventListeners['disconnect'];
       if(listeners)
         listeners.forEach(listener => listener());
     });
 
-    this._ws.addEventListener('open', () => {
-      const eventType = this._reconnect ? 'reconnect' : 'connect';
-      console.log(`Socket ${eventType}ed`);
-      const listeners = this._eventListeners[eventType];
-      this._reconnect = true;
-      if(listeners)
-        listeners.forEach(listener => listener());
+    this._ws.addEventListener('error', error => {
+      console.log(`SocketHandler error: ${error}`);
     });
+
   }
 
-  setRawSocket(socket){
+  setRawSocket(socket, isReconnect){
     if(this._ws && (this._ws.readyState === WebSocket.CONNECTING || this._ws.readyState === WebSocket.OPEN))
       this._ws.terminate();
 
     this._ws = socket;
     this._init();
+    
+    const eventType = isReconnect ? 'reconnect' : 'connect';
+    console.log(`SocketHandler: Socket ${eventType}ed`);
+    const listeners = this._eventListeners[eventType];
+    if(listeners)
+      listeners.forEach(listener => listener());
   }
 
   on(event, listener){

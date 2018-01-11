@@ -4,14 +4,15 @@ const Client = require('./Client');
 class ClientPool {
   constructor(){
     this._clientWsPool = new Map();
+    this.removeClient = this.removeClient.bind(this);
   }
 
-  getClient(id){
-    return this._clientWsPool.get(id);
+  getClient(sid){
+    return this._clientWsPool.get(sid);
   }
 
-  addClient(sid, inputOps){
-    const ops = Object.assign({}, inputOps, {sid});
+  addClient(sid, userInfo){
+    const ops = Object.assign({}, userInfo, {sid, onLeftAllRooms: this.removeClient});
     const newClient = new Client(ops);
     this._clientWsPool.set(sid, newClient);
     return newClient;
