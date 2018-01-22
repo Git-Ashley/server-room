@@ -25,7 +25,8 @@ module.exports = class Client {
   }
 
   removeRoom(room){
-    this._rooms.delete(room.roomId);
+    this._rooms.delete(room.id);
+    console.log(`Removed from room. room size now: ${this._rooms.size}`)
     if(!this._rooms.size){
       console.log(`Client: ${this.id || this.sid} left all rooms`);
       this._onLeftAllRooms(this.sid);
@@ -33,7 +34,7 @@ module.exports = class Client {
   }
 
   in(inputRoom){
-    const room = this._rooms.get(inputRoom.roomId);
+    const room = this._rooms.get(inputRoom.id);
     if(room)
       return true;
     else
@@ -41,8 +42,7 @@ module.exports = class Client {
   }
 
   leaveAllRooms(){
-    console.log(`${this.id || this.sid} leaving all rooms`);
-    for(let [roomId, room] of this._rooms)
+    for(let [id, room] of this._rooms)
       room.leave(this);
     this._rooms.clear();
   }
