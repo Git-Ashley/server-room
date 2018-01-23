@@ -1,6 +1,7 @@
 //const UTILS = require('../../config.js').UTILS;
 const ClientPool = require('./ClientPool');
 const randomStr = require('./random-string.js');
+const WebSocket = require('ws');
 const {parse} = require('url');
 //const EventTypes = require('../event-types.js');
 
@@ -241,8 +242,11 @@ module.exports = class Room {
   }
 }
 
-module.exports.initialize = (wsServer, ops = {}) => {
+module.exports.initialize = (server, ops = {}) => {
   const sidHeader = ops.sidHeader || 'sid';
+
+  const WebSocketServer = WebSocket.Server;
+  const wsServer = new WebSocketServer({server});
 
   wsServer.shouldHandle = req => {
     const sid = getCookie(req.headers.cookie, sidHeader);
