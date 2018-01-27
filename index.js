@@ -245,8 +245,7 @@ module.exports = class Room {
 module.exports.initialize = (server, ops = {}) => {
   const sidHeader = ops.sidHeader || 'sid';
 
-  const WebSocketServer = WebSocket.Server;
-  const wsServer = new WebSocketServer({server});
+  const wsServer = new WebSocket.Server({server});
 
   wsServer.shouldHandle = req => {
     const sid = getCookie(req.headers.cookie, sidHeader);
