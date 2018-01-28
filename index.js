@@ -3,27 +3,9 @@ const ClientPool = require('./ClientPool');
 const randomStr = require('./random-string.js');
 const WebSocket = require('ws');
 const {parse} = require('url');
-//const EventTypes = require('../event-types.js');
 
-/* Hooks (*: Must call super. ^: Do not call super)
----------------------------------------------------------
-*onClientAccepted: When client is accepted & expected to join shortly, but not yet initialized
-*onClientDisconnect: When client disconnects
-*initClient: Hook for when client is initialized on client side. This is the time to register socket events on server side with client. Also optionally you can choose to emit initial startup data (if required) along with an event to tell user the server is also initialized, such as in a game. But note, when at this point, the user is already receiving the rooms events, but cannot emit anything yet. Whether or not you want the user to react to those events or wait for initial startup data and a startup signal is a choice to be made by you!
-*onClientLeave: When client leaves. Be aware that this may happen any time after onClientAccepted even before the client has initialized
-^onJoinRequest: Return true if permission granted to join, false otherwise. If not overidden, permission is always granted
-
-****Options to constructor*****
-initTimeout: time in milliseconds for client to notify initialization
-  complete (via initialize() on client) before being kicked. (default 10 sec)
-  If 0 is passed, then initClient will be called straight away and will not wait
-  for the client to invoke initialized(). This is faster and useful for if there
-  is no initial data that needs to be sent to the client.
-reconnectTimeout: time in milliseconds that clients have to reconnect upon disconnect. If
-  ${timeout} seconds passes without reconnecting, client will be booted from room.
-  (default 0ms)
-
-*/
+let ipHeader = null;
+let sidHeader = 'sid';
 
 module.exports = class Room {
   constructor(ops = {}){
@@ -60,9 +42,15 @@ module.exports = class Room {
   }
 
   //userInfo must contain at least an id property
-  join(sid, userInfo){
-    if(!sid){
-      console.log('Room error: sid must be provided as first argument in join()');
+  join(userInfo){
+    let sid = null;
+
+    if(userInfo.sid){
+      sid = userInfo.sid;
+    } else if (userInfo.cookie){
+      sid = getCookie(userInfo.cookie, sidHeader);
+    } else {
+      console.log('Room error: sid not provided in join()');
       return {success: false, reason: 'Server error'};
     }
 
@@ -75,13 +63,14 @@ module.exports = class Room {
       return {success: false, reason: "You already have a session running on this device."};
     }
 
+    const clientOps = Object.assign({}, userInfo, {sid});
     const result = this.onJoinRequest(userInfo);
     if(result.success){
       let client = ClientPool.getClient(sid);
       if(!client)
-        client = ClientPool.addClient(sid, userInfo);
+        client = ClientPool.addClient(sid, clientOps);
       result.id = this.id;
-      this.onClientAccepted(client, userInfo);
+      this.onClientAccepted(client, clientOps);
     }
     return result;
   }
@@ -243,7 +232,11 @@ module.exports = class Room {
 }
 
 module.exports.initialize = (server, ops = {}) => {
-  const sidHeader = ops.sidHeader || 'sid';
+
+  if(ops.sidHeader)
+    sidHeader = ops.sidHeader;
+  if(ops.ipHeader)
+    ipHeader = ops.ipHeader;
 
   const wsServer = new WebSocket.Server({server});
 
@@ -251,7 +244,7 @@ module.exports.initialize = (server, ops = {}) => {
     const sid = getCookie(req.headers.cookie, sidHeader);
     const client = ClientPool.getClient(sid);
     if(!sid || !client){
-      console.log(`Refused unexpected websocket connection from ${ops.ipHeader ? req.headers[ops.ipHeader] : ''}`);
+      console.log(`Refused unexpected websocket connection from ${ipHeader ? req.headers[ipHeader] : ''}`);
       return false;
     }
 
@@ -262,7 +255,7 @@ module.exports.initialize = (server, ops = {}) => {
     const sid = getCookie(req.headers.cookie, sidHeader);
     const client = ClientPool.getClient(sid);
     if(!sid || !client){
-      console.log(`Refused unexpected websocket connection from ${ops.ipHeader ? req.headers[ops.ipHeader] : ''}`);
+      console.log(`Refused unexpected websocket connection from ${ipHeader ? req.headers[ipHeader] : ''}`);
       return rawWs.terminate();
     }
     const live = parse(req.url, true).query.live;
