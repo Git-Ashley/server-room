@@ -7,9 +7,9 @@ module.exports = class Client {
     if(!ops.onLeftAllRooms)
       return console.log('ERROR: onLeftAllRooms must be defined!');
     if(!ops.socket){
-      this._socketHandler = new SocketHandler(null);
+      this._socketHandler = new SocketHandler(null, {id: ops.id});
     } else {
-      this._socketHandler = new SocketHandler(ops.socket);
+      this._socketHandler = new SocketHandler(ops.socket, {id: ops.id});
     }
 
     this._username = ops.username;
@@ -26,11 +26,8 @@ module.exports = class Client {
 
   removeRoom(room){
     this._rooms.delete(room.id);
-    console.log(`Removed from room. room size now: ${this._rooms.size}`)
-    if(!this._rooms.size){
-      console.log(`Client: ${this.id || this.sid} left all rooms`);
+    if(!this._rooms.size)
       this._onLeftAllRooms(this.sid);
-    }
   }
 
   in(inputRoom){

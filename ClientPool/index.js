@@ -19,6 +19,11 @@ class ClientPool {
   }
 
   removeClient(sid){
+    const client = this._clientWsPool.get(sid);
+    if(client){
+      client.socket.terminate();
+      console.log(`ClientPool::removeClient Terminated websocket connection with ${client.id} (${client.ip})`);
+    }
     this._clientWsPool.delete(sid);
   }
 }

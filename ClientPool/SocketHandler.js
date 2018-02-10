@@ -8,21 +8,21 @@ const WebSocket = require('ws');
 
 module.exports = class SocketHandler {
 
-  constructor(ws = null){
+  constructor(ws = null, ops = {}){
     this._ws = ws;
+    this._id = ops.id; // Just for logging purposes
     this._eventListeners = {};
+    this._isAlive = false;
     if(this._ws)
       this._init();
+
+    this._pingInterval = ops.pingInterval || 3000;
+    this.on('pong', () => this._isAlive = true);
   }
 
-  /*get status(){
-    if(this._ws && this._ws.readyState === WebSocket.OPEN)
-      return Status.CONNECTED;
-    else if(this._ws && this._ws.readyState === WebSocket.CONNECTING)
-      return Status.CONNECTING;
-    else
-      return Status.DISCONNECTED;
-  }*/
+  get id(){
+    return this._id || null;
+  }
 
   _init(){
     this._ws.addEventListener('message', eventJson => {
@@ -30,7 +30,7 @@ module.exports = class SocketHandler {
       const listeners = this._eventListeners[event.type];
 
       if(!listeners)
-        return console.log(`No listeners for event ${event.type}!`);
+        return console.log(`${this.id} No listeners for event ${event.type}!`);
 
       for(let listener of listeners)
         listener(event.data);
@@ -46,6 +46,7 @@ module.exports = class SocketHandler {
       console.log(`SocketHandler error: ${error}`);
     });
 
+    this._heartBeat();
   }
 
   setRawSocket(socket, isReconnect){
@@ -54,7 +55,7 @@ module.exports = class SocketHandler {
 
     this._ws = socket;
     this._init();
-    
+
     const eventType = isReconnect ? 'reconnect' : 'connect';
     console.log(`SocketHandler: Socket ${eventType}ed`);
     const listeners = this._eventListeners[eventType];
@@ -100,7 +101,16 @@ module.exports = class SocketHandler {
   }
 
   terminate(){
-    this._ws.terminate();
-    this._ws = null;
+    if(this._ws){
+      this._ws.terminate();
+      this._ws = null;
+    }
+  }
+
+  _heartBeat(){
+    this._isAlive = false;
+    this.emit('ping');
+
+    setTimeout(() => this._isAlive ? this._heartBeat() : this.terminate(), this._pingInterval);
   }
 }

@@ -3,12 +3,11 @@ const ClientPool = require('./ClientPool');
 const randomStr = require('./random-string.js');
 const WebSocket = require('ws');
 const {parse} = require('url');
-
-let ipHeader = null;
 let sidHeader = 'sid';
 
 module.exports = class Room {
   constructor(ops = {}){
+    this._sidHeader = ops.sidHeader;
     this._clients = new Map();
     this._id = randomStr();
     this._name = ops.name || this._id;
@@ -56,9 +55,15 @@ module.exports = class Room {
 
     const clientInfo = this._clients.get(sid);
     if(clientInfo && (clientInfo.disconnected || clientInfo.rejoinRequired)){
-      clientInfo.rejoinRequired = true;
-      this._onClientRejoin(clientInfo);
-      return {success: true, id: this.id};
+      if(userInfo.id === clientInfo.client.id){
+        clientInfo.rejoinRequired = true;
+        this._onClientRejoin(clientInfo);
+        return {success: true, id: this.id};
+      } else {
+        //Then the client is using the same session under a different ID. Leave with the other ID and carry on the join process as normal.
+        clientInfo.disconnected = false;
+        this.leave(clientInfo.client);
+      }
     } else if (clientInfo){
       return {success: false, reason: "You already have a session running on this device."};
     }
@@ -87,11 +92,12 @@ module.exports = class Room {
       this.leave(client);
   }
 
-  broadcast(event, ...args){
-    //console.log(`emitting ${this.id}${event}`);
+  broadcast(event, payload = null, ops = {}){
+    const exclusionSet = ops.exclude;
+
     for(let [sid, {client}] of this._clients){
-      if(!client.rejoinRequired)
-        client.socket.emit(`${this.id}${event}`, ...args);
+      if(!client.rejoinRequired && !(exclusionSet && exclusionSet.has && exclusionSet.has(sid)))
+        client.socket.emit(`${this.id}${event}`, payload);
     }
   }
 
@@ -155,10 +161,8 @@ module.exports = class Room {
       //Connect event is necessary incase the websocket disconnects again after
       //connection being re-established, and reconnects again.
       const clientInfo = this._clients.get(client.sid);
-      if(clientInfo && clientInfo.disconnected){
+      if(clientInfo && clientInfo.disconnected)
         clientInfo.rejoinRequired = true;
-        clientInfo.disconnected = false;
-      }
     });
   };
 
@@ -232,6 +236,8 @@ module.exports = class Room {
 }
 
 module.exports.initialize = (server, ops = {}) => {
+
+  let ipHeader = null;
 
   if(ops.sidHeader)
     sidHeader = ops.sidHeader;
