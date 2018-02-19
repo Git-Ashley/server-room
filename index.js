@@ -71,7 +71,7 @@ module.exports = class Room {
     const client = clientInfo && clientInfo.client;
 
     const clientOps = Object.assign({}, userInfo, {sid, client});
-    let result = this.onJoinRequest(userInfo);
+    let result = this.onJoinRequest(clientOps);
     if(typeof result === 'boolean')
       result = {success: result};
     else if(typeof result !== 'object')
