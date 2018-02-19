@@ -68,7 +68,7 @@ module.exports = class Room {
       return {success: false, reason: "You already have a session running on this device."};
     }
 
-    const client = clientInfo && clientInfo.client;
+    const client = ClientPool.getClient(sid);
 
     const clientOps = Object.assign({}, userInfo, {sid, client});
     let result = this.onJoinRequest(clientOps);
