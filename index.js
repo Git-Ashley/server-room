@@ -68,7 +68,9 @@ module.exports = class Room {
       return {success: false, reason: "You already have a session running on this device."};
     }
 
-    const clientOps = Object.assign({}, userInfo, {sid});
+    const client = clientInfo && clientInfo.client;
+
+    const clientOps = Object.assign({}, userInfo, {sid, client});
     let result = this.onJoinRequest(userInfo);
     if(typeof result === 'boolean')
       result = {success: result};
