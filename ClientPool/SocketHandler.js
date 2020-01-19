@@ -49,6 +49,10 @@ module.exports = class SocketHandler {
     this._heartBeat();
   }
 
+  isOpen() {
+    return this._ws.readyState === WebSocket.OPEN;
+  }
+
   setRawSocket(socket, isReconnect){
     if(this._ws && (this._ws.readyState === WebSocket.CONNECTING || this._ws.readyState === WebSocket.OPEN))
       this._ws.terminate();
@@ -56,6 +60,8 @@ module.exports = class SocketHandler {
     this._ws = socket;
     this._init();
 
+    //TODO Decide if Sockethandler should know if its a reconnect or not.
+    //It would certainly be a handy thing in some cases, but it'd have to be an opt-in thing imo.
     const eventType = isReconnect ? 'reconnect' : 'connect';
     console.log(`SocketHandler: Socket ${eventType}ed`);
     const listeners = this._eventListeners[eventType];
@@ -63,17 +69,26 @@ module.exports = class SocketHandler {
       listeners.forEach(listener => listener());
   }
 
-  on(event, listener){
+  on(event, inputListener, once = false){
+
+    let listener = inputListener;
+    const self = this;
+    /*if (once) {
+      listener = function(...params) {
+        inputListener(...params);
+        self.removeListener(event, this);
+      };
+    }*/
 
     if(!this._eventListeners[event]){
       this._eventListeners[event] = new Set([listener]);
     } else {
       if(this._eventListeners[event].has(listener))
-        console.log(`Same listener has been registered more than once for event ${event}!`);
+        console.info(`Same listener has been registered more than once for event ${event}!`);
 
       this._eventListeners[event].add(listener);
       if(this._eventListeners.lenth >= 5)
-        console.log(`POSSIBLE MEMORY LEAK: event ${event} has ${this._eventListeners.length} listeners.`);
+        console.warn(`POSSIBLE MEMORY LEAK: event ${event} has ${this._eventListeners.length} listeners.`);
     }
   }
 
@@ -90,9 +105,9 @@ module.exports = class SocketHandler {
 
   emit(type, data){
     if(!this._ws)
-      return console.log(`${new Date()}: Attempting to emit message to uninitialized socket`);
+      return console.warn(`${new Date()}: Attempting to emit message to uninitialized socket`);
 
-    if(this._ws.readyState === WebSocket.OPEN)
+    if(this.isOpen())
       this._ws.send(JSON.stringify({type,data}));
   }
 

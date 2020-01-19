@@ -5,13 +5,13 @@ const WebSocket = require('ws');
 const {parse} = require('url');
 let sidHeader = 'sid';
 
+// A Client represents a unique sid *AND* ID combination. Same sid with diff ID === diff client.
 module.exports = class Room {
   constructor(ops = {}){
     this._sidHeader = ops.sidHeader;
     this._clients = new Map();
     this._id = randomStr();
     this._name = ops.name || this._id;
-    this._initTimeout = ops.initTimeout || 10000;
     this._reconnectTimeout = ops.reconnectTimeout || 0;
   }
 
@@ -32,7 +32,7 @@ module.exports = class Room {
 
   isConnected(client){
     const clientInfo = this._clients.get(client.sid);
-    return clientInfo && !clientInfo.disconnected && !clientInfo.rejoinRequired;
+    return clientInfo && !clientInfo.disconnected && client.socket.isOpen();
   }
 
   getClientBySid(sid){
@@ -50,17 +50,17 @@ module.exports = class Room {
       sid = getCookie(userInfo.cookie, sidHeader);
     } else {
       console.log('Room error: sid not provided in join()');
-      return {success: false, reason: 'Server error'};
+      return { success: false, reason: 'Server error' };
     }
 
     const clientInfo = this._clients.get(sid);
-    if(clientInfo && (clientInfo.disconnected || clientInfo.rejoinRequired)){
+    if(clientInfo && clientInfo.disconnected){
       if(userInfo.id === clientInfo.client.id){
-        clientInfo.rejoinRequired = true;
-        this._onClientRejoin(clientInfo);
+        this.onClientReconnect(clientInfo.client);
         return {success: true, id: this.id};
       } else {
-        //Then the client is using the same session under a different ID. Leave with the other ID and carry on the join process as normal.
+        // The client is using the same session under a different ID. Leave with the other ID and instigate a new join
+        // review.
         clientInfo.disconnected = false;
         this.leave(clientInfo.client);
       }
@@ -68,7 +68,7 @@ module.exports = class Room {
       return {success: false, reason: "You already have a session running on this device."};
     }
 
-    const client = ClientPool.getClient(sid);
+    let client = ClientPool.getClient(sid);
 
     const clientOps = Object.assign({}, userInfo, {sid, client});
     let result = this.onJoinRequest(clientOps);
@@ -78,7 +78,6 @@ module.exports = class Room {
       return {success: false, reason: 'Server error'};
 
     if(result.success){
-      let client = ClientPool.getClient(sid);
       if(!client)
         client = ClientPool.addClient(sid, clientOps);
       result.id = this.id;
@@ -103,7 +102,7 @@ module.exports = class Room {
     const exclusionSet = ops.exclude;
 
     for(let [sid, {client}] of this._clients){
-      if(!client.rejoinRequired && !(exclusionSet && exclusionSet.has && exclusionSet.has(sid)))
+      if(!(exclusionSet && (exclusionSet.has(sid) || exclusionSet.has(client.id))))
         client.socket.emit(`${this.id}${event}`, payload);
     }
   }
@@ -117,9 +116,7 @@ module.exports = class Room {
     if(!this.hasClient(client))
       return console.log(`room.js addListener error: Client ${client.id || client.sid} not found`);
 
-    const event = inputEvent === 'disconnect' || inputEvent === 'reconnect' ||
-      inputEvent === 'connect' ?
-      inputEvent : `${this.id}${inputEvent}`;
+    const event = ['disconnect', 'reconnect', 'connect'].includes(inputEvent) ? inputEvent : `${this.id}${inputEvent}`;
     this._getClientListeners(client.sid).set(event, listener);
     client.socket.on(event, listener);
   }
@@ -128,28 +125,20 @@ module.exports = class Room {
 
   //Optional override in subclass. If overidden, must call super.
   onClientAccepted(client){
-    console.log(`Room: client ${client.id || client.sid} accepted`);
-    setTimeout(() => {
-      const clientInfo = this._clients.get(client.sid);
-      if(clientInfo && !clientInfo.initialized)
-        this.leave(client);
-    }, this._initTimeout);
+    console.info(`Room: client ${client.id || client.sid} accepted`);
     this._clients.set(client.sid,
       {
         client,
         listeners: new Map(),
-        initialized: false,
-        disconnected: false,
-        rejoinRequired: false
+        disconnected: false
       });
 
     client.addRoom(this);
-    this.addListener(client, 'CLIENT_INITIALIZED', () => this.initClient(client));
     this.addListener(client, 'EXIT', () => this.leave(client));
     this.addListener(client, 'disconnect', () => {
       if(this.hasClient(client)){
         const clientInfo = this._clients.get(client.sid);
-        if(!clientInfo.disconnected && !clientInfo.rejoinRequired){
+        if(!clientInfo.disconnected){
           console.log(`Room: client ${client.id || client.sid} disconnected`);
           this.onClientDisconnect(client);
         }
@@ -157,20 +146,19 @@ module.exports = class Room {
     });
     this.addListener(client, 'reconnect', () => {
       if(this.hasClient(client)){
-        const clientInfo = this._clients.get(client.sid);
-        if(clientInfo.disconnected && !clientInfo.rejoinRequired){
-          console.log(`Room: client ${client.id || client.sid} reconnected`);
+        console.log(`Room: client ${client.id || client.sid} reconnected`);
+        if (this.onClientReconnect)
           this.onClientReconnect(client);
-        }
       }
     });
-    this.addListener(client, 'connect', () => {
-      //Connect event is necessary incase the websocket disconnects again after
-      //connection being re-established, and reconnects again.
-      const clientInfo = this._clients.get(client.sid);
-      if(clientInfo && clientInfo.disconnected)
-        clientInfo.rejoinRequired = true;
-    });
+
+    if (this.onClientConnect) {
+      if (this.isConnected(client)) {
+        process.nextTick(() => this.onClientConnect(client));
+      } else {
+        this.addListener(client, 'connect', () => this.onClientConnect(client));
+      }
+    }
   };
 
   //Optional override in subclass. If overidden, must call super
@@ -201,30 +189,15 @@ module.exports = class Room {
       clientInfo.disconnected = false;
   }
 
-  /*Optional override in subclass. If overidden, must call super. When
-    initClient is called, it can be assumed that the client is fully initialized
-  */
-  initClient(client){
-    this._clients.get(client.sid).initialized = true;
-  }
+  initClient(client){}
 
-  //Optional override in subclass. Do not call super.
+  //Optional override in subclass. Call to super is not necessary.
   onJoinRequest(userInfo){return {success: true};}
 
 
 
 
   //****************Private functions. Not part of API.************************
-  _onClientRejoin(clientInfo){
-    const client = clientInfo.client;
-    const oldListener = this._getClientListeners(clientInfo.client.sid).get(`${this.id}CLIENT_INITIALIZED`);
-    client.socket.removeListener(`${this.id}CLIENT_INITIALIZED`, oldListener);
-    this.addListener(client, 'CLIENT_INITIALIZED', () => {
-      clientInfo.rejoinRequired = false;
-      this.onClientReconnect(client);
-    });
-  }
-
   _getClientListeners(sid){
     const clientInfo = this._clients.get(sid);
     return clientInfo && clientInfo.listeners;
@@ -241,6 +214,60 @@ module.exports = class Room {
     client.removeRoom(this);
   }
 }
+
+function union(setA, setB) {
+  const _union = new Set(setA);
+  for (let elem of setB) {
+    _union.add(elem);
+  }
+  return _union;
+}
+
+module.exports.WithReadyCheck = class RoomWithInitialization extends Room {
+  constructor(...params) {
+    super(...params);
+    this.initializing = new Set();
+  }
+
+  onClientAccepted(client) {
+    super.onClientAccepted(client);
+    this._onClientInitialized(client, this.onClientReady);
+  }
+
+  //Will always require re-sending room state
+  onClientReconnect(client) {
+    super.onClientReconnect(client);
+    this._onClientInitialized(client, this.onClientReconnectReady);
+  }
+
+  _onClientInitialized(client, callback) {
+    if (!this.initializing.has(client.id)) {
+      const listener = () => {
+        callback.call(this, client);
+        client.socket.removeListener(`${this.id}CLIENT_INITIALIZED`, listener);
+        this.initializing.delete(client.id);
+      };
+
+      this.initializing.add(client.id);
+      this.addListener(client, 'CLIENT_INITIALIZED', listener);
+    }
+  }
+
+  onClientReady() { /** Override. Call to super not necessary. This is called when client has called initialized() on frontend. */ }
+
+  onClientReconnectReady() { /** Override this instead of onClientReconnect if you have opted into disconnect/reconnect functionality */ }
+
+  broadcast(event, payload, ops = {}) {
+    const newOps = ops;
+    if (newOps.exclude) {
+      newOps.exclude = union(newOps.exclude, this.initializing);
+    } else {
+      newOps.exclude = this.initializing;
+    }
+
+    super.broadcast(event, payload, newOps);
+  }
+} 
 
 module.exports.initialize = (server, ops = {}) => {
 
@@ -272,7 +299,7 @@ module.exports.initialize = (server, ops = {}) => {
       return rawWs.terminate();
     }
     const live = parse(req.url, true).query.live;
-    const isReconnect = live === 'true' ? true : false;
+    const isReconnect = live === 'true';
     client.socket.setRawSocket(rawWs, isReconnect);
     console.log(`[INFO] ${client.id} opened new websocket session from ${client.ip}.`);
   });
