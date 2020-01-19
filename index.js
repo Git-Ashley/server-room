@@ -6,7 +6,7 @@ const {parse} = require('url');
 let sidHeader = 'sid';
 
 // A Client represents a unique sid *AND* ID combination. Same sid with diff ID === diff client.
-module.exports = class Room {
+class Room {
   constructor(ops = {}){
     this._sidHeader = ops.sidHeader;
     this._clients = new Map();
@@ -214,6 +214,8 @@ module.exports = class Room {
     client.removeRoom(this);
   }
 }
+
+module.exports = Room;
 
 function union(setA, setB) {
   const _union = new Set(setA);
