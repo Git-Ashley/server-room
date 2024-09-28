@@ -43,7 +43,7 @@ module.exports = class SocketHandler {
     });
 
     this._ws.addEventListener('error', error => {
-      console.log(`SocketHandler error: ${typeof error === 'string' ? error : JSON.stringify(error)}`);
+      console.log('SocketHandler error.');
     });
 
     this._heartBeat();
