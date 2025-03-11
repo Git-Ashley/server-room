@@ -3,12 +3,12 @@ const ClientPool = require('./ClientPool');
 const randomStr = require('./random-string.js');
 const WebSocket = require('ws');
 const {parse} = require('url');
-let sidHeader = 'sid';
+let sidCookie = 'sid';
 
 // A Client represents a unique sid *AND* ID combination. Same sid with diff ID === diff client.
 class Room {
   constructor(ops = {}){
-    this._sidHeader = ops.sidHeader;
+    this._sidCookie = ops.sidCookie;
     this._clients = new Map();
     this._id = randomStr();
     this._name = ops.name || this._id;
@@ -47,7 +47,7 @@ class Room {
     if(userInfo.sid){
       sid = userInfo.sid;
     } else if (userInfo.cookie){
-      sid = getCookie(userInfo.cookie, sidHeader);
+      sid = getCookie(userInfo.cookie, sidCookie);
     } else {
       console.log('Room error: sid not provided in join()');
       return { success: false, reason: 'Server error' };
@@ -275,15 +275,15 @@ module.exports.initialize = (server, ops = {}) => {
 
   let ipHeader = null;
 
-  if(ops.sidHeader)
-    sidHeader = ops.sidHeader;
+  if(ops.sidCookie)
+    sidCookie = ops.sidCookie;
   if(ops.ipHeader)
     ipHeader = ops.ipHeader;
 
   const wsServer = new WebSocket.Server({server});
 
   wsServer.shouldHandle = req => {
-    const sid = getCookie(req.headers.cookie, sidHeader);
+    const sid = getSid(req, sidCookie, ops.sidHeader);
     const client = ClientPool.getClient(sid);
     if(!sid || !client){
       console.log(`Refused unexpected websocket connection from ${ipHeader ? req.headers[ipHeader] : ''}`);
@@ -294,7 +294,7 @@ module.exports.initialize = (server, ops = {}) => {
   };
 
   wsServer.on('connection', function(rawWs, req){
-    const sid = getCookie(req.headers.cookie, sidHeader);
+    const sid = getSid(req, sidCookie, ops.sidHeader);
     const client = ClientPool.getClient(sid);
     if(!sid || !client){
       console.log(`Refused unexpected websocket connection from ${ipHeader ? req.headers[ipHeader] : ''}`);
@@ -319,4 +319,11 @@ function getCookie(cookieStr, name){
       return c.substring(name.length+1, c.length);
     }
   }
+}
+
+function getSid(req, sidCookie, sidHeader){
+  if (sidHeader && req.headers[sidHeader]) {
+    return req.headers[sidHeader];
+  }
+  return getCookie(req.headers.cookie, sidCookie);
 }
