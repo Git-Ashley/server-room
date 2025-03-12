@@ -322,11 +322,8 @@ function getCookie(cookieStr, name){
 }
 
 function getSid(req, sidCookie, sidHeader){
-  if (sidHeader) {
-    const queries = req.url?.split('?')[1]?.split('&').map((queryPair) => queryPair.split('='));
-    const sid = queries?.find(([key]) => key === sidHeader)[1];
-    if (sid)
-      return sid;
+  if (sidHeader && req.headers[sidHeader]) {
+    return req.headers[sidHeader];
   }
   return getCookie(req.headers.cookie, sidCookie);
 }
